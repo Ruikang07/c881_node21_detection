@@ -1,5 +1,5 @@
 # c881_node21_detection
-An object detection project of CISC881 based Node21- Grand Challenge
+An object detection project of CISC881 based on Node21- Grand Challenge
 
 # Nodule Detection Algorithm
 
