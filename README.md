@@ -1,7 +1,19 @@
 # c881_node21_detection
 An object detection project of CISC881 based on [Node21- Grand Challenge](https://node21.grand-challenge.org/)
 
-# Nodule Detection Algorithm
+## Group Members
+1. [Ruikang Luo](https://github.com/Ruikang07)
+2. [Yuchuan Li](https://github.com/infinitr0us)
+
+## Tasks Division and Progress
+1. Algorithm Improvement
+*
+2. Data Pre-processing
+* Dataset Local Partition
+* Pre-trained Models
+* Data Augmentation: Image Transformation
+
+# From original repo: Nodule Detection Algorithm
 
 This codebase implements a baseline model, [Faster R-CNN](https://papers.nips.cc/paper/2015/hash/14bfa6bb14875e45bba028a21ed38046-Abstract.html), 
 for the nodule detection track in [NODE21](https://node21.grand-challenge.org/). 
