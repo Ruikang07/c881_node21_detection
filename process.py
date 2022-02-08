@@ -30,7 +30,7 @@ email: ecemsogancioglu@gmail.com
 
 # This parameter adapts the paths between local execution and execution in docker. You can use this flag to switch between these two modes.
 # For building your docker, set this parameter to True. If False, it will run process.py locally for test purposes.
-execute_in_docker = True
+execute_in_docker = False
 
 class Noduledetection(DetectionAlgorithm):
     def __init__(self, input_dir, output_dir, train=False, retrain=False, retest=False):
@@ -101,7 +101,7 @@ class Noduledetection(DetectionAlgorithm):
    
     
     #--------------------Write your retrain function here ------------
-    def train(self, num_epochs = 1):
+    def train(self, num_epochs = 10):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -128,7 +128,7 @@ class Noduledetection(DetectionAlgorithm):
                                                        step_size=3,
                                                        gamma=0.1)        
         for epoch in range(num_epochs):
-            train_one_epoch(self.model, optimizer, data_loader, self.device, epoch, print_freq=10)
+            train_one_epoch(self.model, optimizer, data_loader, self.device, epoch, print_freq=100)
             # update the learning rate
             lr_scheduler.step()
             print('epoch ', str(epoch),' is running')
