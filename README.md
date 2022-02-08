@@ -11,6 +11,7 @@ An object detection project of CISC881 based on [Node21- Grand Challenge](https:
 2. Data Pre-processing
 * Dataset Local Partition
 * Pre-trained Models
+* Add local evaluation support based on the metrics of challenge on detection track
 * Data Augmentation: Image Transformation
 
 # From original repo: Nodule Detection Algorithm
