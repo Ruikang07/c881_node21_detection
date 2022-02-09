@@ -32,8 +32,10 @@ email: ecemsogancioglu@gmail.com
 # For building your docker, set this parameter to True. If False, it will run process.py locally for test purposes.
 execute_in_docker = False
 
+
 class Noduledetection(DetectionAlgorithm):
-    def __init__(self, input_dir, output_dir, train=False, retrain=False, retest=False, pretrained_model=False, pretrained_backbones = False):
+    def __init__(self, input_dir, output_dir, train=False, retrain=False, retest=False, pretrained_model=False,
+                 pretrained_backbones=False):
         super().__init__(
             validators=dict(
                 input_image=(
@@ -49,7 +51,8 @@ class Noduledetection(DetectionAlgorithm):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.input_path, self.output_path = input_dir, output_dir
         print('using the device ', self.device)
-        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=pretrained_model, pretrained_backbone=pretrained_backbones)
+        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=pretrained_model,
+                                                                          pretrained_backbone=pretrained_backbones)
         num_classes = 2  # 1 class (nodule) + background
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
@@ -99,7 +102,7 @@ class Noduledetection(DetectionAlgorithm):
         return scored_candidates
 
     # --------------------Write your retrain function here ------------
-    def train(self, num_epochs=5):
+    def train(self, num_epochs=5, RRC=False, RVF=False):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -110,8 +113,8 @@ class Noduledetection(DetectionAlgorithm):
         # create training dataset and defined transformations
         self.model.train()
         input_dir = self.input_path
-        dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'train.csv'), get_transform(train=True))
-        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False))
+        dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'train.csv'), get_transform(train=True, RRC=RRC, RVF=RVF))
+        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False, RRC=False, RVF=False))
         print('training starts ')
         # define training and validation data loaders
         data_loader = torch.utils.data.DataLoader(
@@ -230,8 +233,10 @@ class Noduledetection(DetectionAlgorithm):
         print(data)
         return data
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(
         prog='process.py',
         description=
@@ -249,10 +254,16 @@ if __name__ == "__main__":
     parser.add_argument('--pretrained_backbone', action='store_true', help="Whether to use the pretrained ResNet-50 "
                                                                            "backbone (on ImageNet) or not ")
 
+    parser.add_argument('--RRC', action='store_true', help="Whether to use the resize and randomcrop data augmentation "
+                                                           "or not ")
+    parser.add_argument('--RVF', action='store_true', help="Whether to use the randomverticalflip data augmentation "
+                                                           "or not ")
+
     parsed_args = parser.parse_args()
     if (parsed_args.train or parsed_args.retrain):  # train mode: retrain or train
         Noduledetection(parsed_args.input_dir, parsed_args.output_dir, parsed_args.train, parsed_args.retrain,
-                        parsed_args.retest, pretrained_model=parsed_args.pretrained_model, pretrained_backbones=parsed_args.pretrained_backbone).train()
+                        parsed_args.retest, pretrained_model=parsed_args.pretrained_model,
+                        pretrained_backbones=parsed_args.pretrained_backbone).train(RRC=parsed_args.RRC, RVF=parsed_args.RVF)
     else:  # test mode (test or retest)
         if parsed_args.retest:
             Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).retest()
