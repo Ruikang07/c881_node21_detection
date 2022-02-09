@@ -54,7 +54,31 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq):
 
 
 def eval_intrain(model, data_loader, device):
+
     model.eval()
+
+    TP25, FP25, TN25, FN25 = eval_point(model, data_loader, device, threshold=0.25)
+    TP125, FP125, TN125, FN125 = eval_point(model, data_loader, device, threshold=0.125)
+    TP5, FP5, TN5, FN5 = eval_point(model, data_loader, device, threshold=0.5)
+
+    Sensitivity25 = TP25 / (TP25 + FN25)
+    Specificity25 = TN25 / (TN25 + FP25)
+
+    Sensitivity125 = TP125 / (TP125 + FN125)
+    Specificity125 = TN125 / (TN125 + FP125)
+
+    Sensitivity5 = TP5 / (TP5 + FN5)
+    Specificity5 = TN5 / (TN5 + FP5)
+
+    AUC = (Sensitivity5+1)*Specificity5/2+(Sensitivity5+Sensitivity25)*(Specificity25-Specificity5)/2+\
+          (Sensitivity125+Sensitivity25)*(Specificity125-Specificity25)/2+Sensitivity125*(1-Specificity125)/2
+
+    Final_score = 0.75*AUC+0.25*Sensitivity25
+
+    print('Final_score: {:.6f}, AUC: {:.6f}, Sensitivity {:.6f}'.format(Final_score, AUC, Sensitivity25))
+
+
+def eval_point(model, data_loader, device, threshold):
 
     TP = 0
     FP = 0
@@ -93,7 +117,7 @@ def eval_intrain(model, data_loader, device):
                         if intersection_over_union(np_predicted_boxes, boxes[k, :]) > 0.2:
                             truth = truth + 1
 
-                        if np_predicted_scores > 0.25:
+                        if np_predicted_scores > threshold:
                             predicted_result = predicted_result + 1
 
                     if truth > 0 and predicted_result > 0:
@@ -105,7 +129,7 @@ def eval_intrain(model, data_loader, device):
                     if truth == 0 and predicted_result == 0:
                         TN_temp = TN_temp + 1
 
-                if len(predicted_boxes)==0:
+                if len(predicted_boxes) == 0:
                     length = 1
                 else:
                     length = len(predicted_boxes)
@@ -121,14 +145,13 @@ def eval_intrain(model, data_loader, device):
                 for j in range(len(predicted_boxes)):
 
                     np_predicted_scores = predicted_scores[j].cpu().numpy()
-                    predicted_result = 0
 
-                    if np_predicted_scores > 0.25:
+                    if np_predicted_scores > threshold:
                         FP_temp = FP_temp + 1
                     else:
                         TN_temp = TN_temp + 1
 
-                if len(predicted_boxes)==0:
+                if len(predicted_boxes) == 0:
                     length = 1
                 else:
                     length = len(predicted_boxes)
@@ -136,6 +159,4 @@ def eval_intrain(model, data_loader, device):
                 FP = FP + FP_temp / length
                 TN = TN + TN_temp / length
 
-    Sensitivity = TP / (TP + FN)
-    Specificity = TN / (TN + FP)
-    print('Sensitivity: {:.6f}, Specificity {:.6f}'.format(Sensitivity, Specificity))
+    return TP, FP, TN, FN
