@@ -6,13 +6,14 @@ An object detection project of CISC881 based on [Node21- Grand Challenge](https:
 2. [Yuchuan Li](https://github.com/infinitr0us)
 
 ## Tasks Division and Progress
-1. Algorithm Improvement
-*
-2. Data Pre-processing
-* Dataset Local Partition
-* Pre-trained Models
-* Add local evaluation support based on the metrics of challenge on detection track
-* Data Augmentation: Image Transformation
+1. Algorithm Improvement： [Ruikang Luo](https://github.com/Ruikang07)
+- [ ] TO DO
+2. Data Pre-processing： [Yuchuan Li](https://github.com/infinitr0us)
+- [x] Dataset Local Partition
+- [x] Pre-trained Models
+- [x] Add local evaluation support based on the metrics of challenge on detection track
+- [x] Data Augmentation: Image Transformation
+- [x] Local Visualization Support
 
 # From original repo: Nodule Detection Algorithm
 
