@@ -17,7 +17,7 @@ from typing import Dict
 import training_utils.utils as utils
 from training_utils.dataset import CXRNoduleDataset, get_transform
 import os
-from training_utils.train import train_one_epoch, eval_intrain
+from training_utils.train import train_one_epoch, eval_intrain, eval_aftertrain
 import itertools
 from pathlib import Path
 from postprocessing import get_NonMaxSup_boxes
@@ -99,7 +99,7 @@ class Noduledetection(DetectionAlgorithm):
         return scored_candidates
 
     # --------------------Write your retrain function here ------------
-    def train(self, num_epochs=10):
+    def train(self, num_epochs=5):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -151,7 +151,9 @@ class Noduledetection(DetectionAlgorithm):
             valset, batch_size=1, shuffle=False, num_workers=1,
             collate_fn=utils.collate_fn)
 
-        eval_intrain(self.model, val_loader, self.device)
+        output_dir = self.output_path
+
+        eval_aftertrain(self.model, val_loader, self.device, output_dir)
 
     def format_to_GC(self, np_prediction, spacing) -> Dict:
         '''
