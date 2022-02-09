@@ -9,9 +9,14 @@ import training_utils.transforms as T
 
 def get_transform(train):
     transforms = []
-    transforms.append(T.ToTensor())
     if train:
+        transforms.append(T.Resize())
+        transforms.append(T.RandomCrop())
+        transforms.append(T.ToTensor())
         transforms.append(T.RandomHorizontalFlip(0.5))
+        transforms.append(T.RandomVerticalFlip(0.5))
+    else:
+        transforms.append(T.ToTensor())
     return T.Compose(transforms)
 
 class CXRNoduleDataset(object):
