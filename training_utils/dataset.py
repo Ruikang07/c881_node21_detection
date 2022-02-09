@@ -19,7 +19,7 @@ class CXRNoduleDataset(object):
         self.root = root
         self.transforms = transforms
         self.data = pd.read_csv(csv_file)
-        self.imgs = list(sorted(os.listdir(os.path.join(root, "train"))))
+        self.imgs = list(sorted(os.listdir(os.path.join(root, "images"))))
         self.imgs = [i for i in self.imgs if i in self.data['img_name'].values]
         # Read only image files in following format
         self.imgs = [i  for i in self.imgs if os.path.splitext(i)[1].lower() in (".mhd", ".mha", ".dcm", ".png", ".jpg", ".jpeg")]   

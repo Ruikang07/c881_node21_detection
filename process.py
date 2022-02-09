@@ -17,7 +17,7 @@ from typing import Dict
 import training_utils.utils as utils
 from training_utils.dataset import CXRNoduleDataset, get_transform
 import os
-from training_utils.train import train_one_epoch
+from training_utils.train import train_one_epoch, eval_intrain
 import itertools
 from pathlib import Path
 from postprocessing import get_NonMaxSup_boxes
@@ -68,7 +68,7 @@ class Noduledetection(DetectionAlgorithm):
             print('loading the retrained model_retrained.pth file')
             self.model.load_state_dict(
                 torch.load(
-                    Path(os.path.join(self.input_path, 'model_retrained.pth')),
+                    Path(os.path.join(self.output_path, 'model_retrained.pth')),
                     map_location=self.device,
                 )
             )
@@ -111,10 +111,14 @@ class Noduledetection(DetectionAlgorithm):
         self.model.train()
         input_dir = self.input_path
         dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'train.csv'), get_transform(train=True))
+        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False))
         print('training starts ')
         # define training and validation data loaders
         data_loader = torch.utils.data.DataLoader(
             dataset, batch_size=4, shuffle=True, num_workers=4,
+            collate_fn=utils.collate_fn)
+        val_loader = torch.utils.data.DataLoader(
+            valset, batch_size=1, shuffle=False, num_workers=1,
             collate_fn=utils.collate_fn)
 
         # construct an optimizer
@@ -132,9 +136,22 @@ class Noduledetection(DetectionAlgorithm):
             print('epoch ', str(epoch), ' is running')
             # evaluate on the test dataset
 
+            eval_intrain(self.model, val_loader, self.device)
+
             # IMPORTANT: save retrained version frequently.
             print('saving the model')
             torch.save(self.model.state_dict(), os.path.join(self.output_path, 'model_retrained.pth'))
+
+    def retest(self):
+        input_dir = self.input_path
+        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False))
+        print('retesting starts ')
+        # define validation data loaders
+        val_loader = torch.utils.data.DataLoader(
+            valset, batch_size=1, shuffle=False, num_workers=1,
+            collate_fn=utils.collate_fn)
+
+        eval_intrain(self.model, val_loader, self.device)
 
     def format_to_GC(self, np_prediction, spacing) -> Dict:
         '''
@@ -234,4 +251,7 @@ if __name__ == "__main__":
         Noduledetection(parsed_args.input_dir, parsed_args.output_dir, parsed_args.train, parsed_args.retrain,
                         parsed_args.retest, pretrained_model=parsed_args.pretrained_model, pretrained_backbones=parsed_args.pretrained_backbone).train()
     else:  # test mode (test or retest)
-        Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).process()
+        if parsed_args.retest:
+            Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).retest()
+        else:
+            Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).process()
