@@ -144,6 +144,8 @@ class Noduledetection(DetectionAlgorithm):
             # IMPORTANT: save retrained version frequently.
             print('saving the model')
             file_name = 'model_retrained' + str(epoch) + '.pth'
+            if not os.path.exists(self.output_path):
+                os.makedirs(self.output_path)
             torch.save(self.model.state_dict(), os.path.join(self.output_path, file_name))
 
     def retest(self):
