@@ -1,5 +1,6 @@
 import SimpleITK
 import numpy as np
+from matplotlib import pyplot as plt
 
 from pandas import DataFrame
 from scipy.ndimage import center_of_mass, label
@@ -202,6 +203,40 @@ class Noduledetection(DetectionAlgorithm):
                 prediction = self.model([tensor_image.to(self.device)])
             
             prediction = [get_NonMaxSup_boxes(prediction[0])]
+            
+            
+            # Following bbox plot code borrowed from 
+            # https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/detection_demo.py
+            out_boxes = prediction[0]["boxes"]
+            out_scores = prediction[0]["scores"]
+            num_boxes = len(out_boxes)
+            
+            # maximum draw 10 bbox
+            max_vis = 10
+            
+            # only draw bbox with probability >= 0.1
+            thres = 0.1
+            
+            class_name = "Nodule"            
+            
+            fig, ax = plt.subplots(figsize=(12, 12))
+            ax.imshow(image[0], cmap='gray') 
+
+            for idx in range(0, min(num_boxes, max_vis)):
+                score = out_scores[idx].numpy()
+                bbox = out_boxes[idx].numpy()     
+
+                if score < thres:
+                    continue
+
+                ax.add_patch(plt.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], fill=False,
+                                           edgecolor='red', linewidth=3.5))
+                ax.text(bbox[0], bbox[1] - 2, '{:s} {:.3f}'.format(class_name, score), bbox=dict(facecolor='blue', alpha=0.5),
+                        fontsize=14, color='white')
+
+            fig.savefig('./test_figs_with_bbox/image_with_bbox_'+str(j)+'.png')
+            
+            
             # convert predictions from tensor to numpy array.
             np_prediction = {str(key):[i.cpu().numpy() for i in val]
                    for key, val in prediction[0].items()}
