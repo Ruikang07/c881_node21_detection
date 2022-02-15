@@ -154,6 +154,7 @@ class Noduledetection(DetectionAlgorithm):
             # evaluate on the test dataset
             print("evaluate on the test dataset")
             self.model.eval()  
+            #The evalute function is based on https://github.com/pytorch/vision/tree/main/references/detection
             evaluate(self.model, test_data_loader, device=self.device)            
             
             #IMPORTANT: save retrained version frequently.
