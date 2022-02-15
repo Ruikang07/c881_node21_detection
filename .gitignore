@@ -113,6 +113,7 @@ Example_algorithm_test.ipynb
 # dir with big files
 output/
 cxr_images/
+train_val/
 
 #big model files
 *.pth
