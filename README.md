@@ -10,9 +10,11 @@ An object detection project of CISC881 based on [Node21- Grand Challenge](https:
 * Faster R-CNN with validation
 * RetinaNet
 2. Data Pre-processing
-* Dataset Local Partition
-* Pre-trained Models
-* Data Augmentation: Image Transformation
+- [x] Dataset Local Partition
+- [x] Pre-trained Models
+- [x] Add local evaluation support based on the metrics of challenge on detection track
+- [x] Data Augmentation: Image Transformation
+- [x] Local Visualization Support
 
 # From original repo: Nodule Detection Algorithm
 
