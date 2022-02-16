@@ -1,11 +1,15 @@
 import SimpleITK
 import numpy as np
+from matplotlib import pyplot as plt
 
 from pandas import DataFrame
 from scipy.ndimage import center_of_mass, label
-import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
 import torch
+import torchvision
+#from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.retinanet import RetinaNet
+
 from evalutils import DetectionAlgorithm
 from evalutils.validators import (
     UniquePathIndicesValidator,
@@ -14,10 +18,13 @@ from evalutils.validators import (
 from skimage import transform
 import json
 from typing import Dict
-import training_utils.utils as utils
-from training_utils.dataset import CXRNoduleDataset, get_transform
+
+import train_val_utils.utils as utils
+from train_val_utils.dataset import CXRNoduleDataset, get_transform
+from train_val_utils.engine import train_one_epoch
+from train_val_utils.engine import evaluate
+
 import os
-from training_utils.train import train_one_epoch
 import itertools
 from pathlib import Path
 from postprocessing import get_NonMaxSup_boxes
@@ -49,10 +56,11 @@ class Noduledetection(DetectionAlgorithm):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.input_path, self.output_path = input_dir, output_dir
         print('using the device ', self.device)
-        self.model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(pretrained=False, pretrained_backbone=False)
-        num_classes = 2  # 1 class (nodule) + background
-        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+        
+        self.model = torchvision.models.detection.retinanet_resnet50_fpn(
+                                                                        pretrained=False, 
+                                                                        pretrained_backbone=True, 
+                                                                        num_classes=2)
         
         if not (train or retest):
             # retrain or test phase
@@ -101,7 +109,7 @@ class Noduledetection(DetectionAlgorithm):
    
     
     #--------------------Write your retrain function here ------------
-    def train(self, num_epochs = 1):
+    def train(self, num_epochs = 50):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -111,13 +119,22 @@ class Noduledetection(DetectionAlgorithm):
 
         # create training dataset and defined transformations
         self.model.train() 
-        input_dir = self.input_path
-        dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'metadata.csv'), get_transform(train=True))
+        train_dir = self.input_path+"/train"
+        test_dir = self.input_path+"/test"
+        
+        train_dataset = CXRNoduleDataset(train_dir, os.path.join(train_dir, 'train.csv'), get_transform(train=True))
+        test_dataset = CXRNoduleDataset(test_dir, os.path.join(test_dir, 'test.csv'), get_transform(train=False))
+        
         print('training starts ')
         # define training and validation data loaders
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=2, shuffle=True, num_workers=4,
+        train_data_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
+            
+        test_data_loader = torch.utils.data.DataLoader(
+            test_dataset, batch_size=2, shuffle=True, num_workers=4,
+            collate_fn=utils.collate_fn)
+    
     
         # construct an optimizer
         params = [p for p in self.model.parameters() if p.requires_grad]
@@ -128,15 +145,21 @@ class Noduledetection(DetectionAlgorithm):
                                                        step_size=3,
                                                        gamma=0.1)        
         for epoch in range(num_epochs):
-            train_one_epoch(self.model, optimizer, data_loader, self.device, epoch, print_freq=10)
+            print('epoch ', str(epoch),' is running')
+            self.model.train()
+            train_one_epoch(self.model, optimizer, train_data_loader, self.device, epoch, print_freq=100)
             # update the learning rate
             lr_scheduler.step()
-            print('epoch ', str(epoch),' is running')
+            
             # evaluate on the test dataset
+            print("evaluate on the test dataset")
+            self.model.eval()  
+            evaluate(self.model, test_data_loader, device=self.device)            
             
             #IMPORTANT: save retrained version frequently.
             print('saving the model')
-            torch.save(self.model.state_dict(), os.path.join(self.output_path, 'model_retrained.pth'))
+            file_name = 'model_retrained' + str(epoch) + '.pth'
+            torch.save(self.model.state_dict(), os.path.join(self.output_path, file_name))
       
 
     def format_to_GC(self, np_prediction, spacing) -> Dict:
@@ -202,6 +225,44 @@ class Noduledetection(DetectionAlgorithm):
                 prediction = self.model([tensor_image.to(self.device)])
             
             prediction = [get_NonMaxSup_boxes(prediction[0])]
+            
+            
+            # Following bbox plot code borrowed from 
+            # https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/detection_demo.py
+            out_boxes = prediction[0]["boxes"]
+            out_scores = prediction[0]["scores"]
+            num_boxes = len(out_boxes)
+            
+            # maximum draw 10 bbox
+            max_vis = 10
+            
+            # only draw bbox with probability >= 0.1
+            thres = 0.1
+            
+            class_name = "Nodule"            
+            
+            fig, ax = plt.subplots(figsize=(12, 12))
+            ax.imshow(image[0], cmap='gray') 
+
+            for idx in range(0, min(num_boxes, max_vis)):
+                if(self.device == 'cpu'):
+                    score = out_scores[idx].numpy()
+                    bbox = out_boxes[idx].numpy()     
+                else:    
+                    score = out_scores[idx].cpu().numpy()
+                    bbox = out_boxes[idx].cpu().numpy()      
+
+                if score < thres:
+                    continue
+
+                ax.add_patch(plt.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], fill=False,
+                                           edgecolor='red', linewidth=3.5))
+                ax.text(bbox[0], bbox[1] - 2, '{:s} {:.3f}'.format(class_name, score), bbox=dict(facecolor='blue', alpha=0.5),
+                        fontsize=14, color='white')
+
+            fig.savefig('./test_figs_with_bbox/image_with_bbox_'+str(j)+'.png')
+            
+            
             # convert predictions from tensor to numpy array.
             np_prediction = {str(key):[i.cpu().numpy() for i in val]
                    for key, val in prediction[0].items()}

@@ -4,9 +4,11 @@ from matplotlib import pyplot as plt
 
 from pandas import DataFrame
 from scipy.ndimage import center_of_mass, label
+
+import torch
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-import torch
+#from torchvision.models.detection.retinanet import RetinaNet
 
 from evalutils import DetectionAlgorithm
 from evalutils.validators import (
@@ -54,10 +56,11 @@ class Noduledetection(DetectionAlgorithm):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.input_path, self.output_path = input_dir, output_dir
         print('using the device ', self.device)
-        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=False)
+        
+        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=True)
         num_classes = 2  # 1 class (nodule) + background
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)        
         
         # move model to the right device
         self.model.to(self.device)
@@ -109,7 +112,7 @@ class Noduledetection(DetectionAlgorithm):
    
     
     #--------------------Write your retrain function here ------------
-    def train(self, num_epochs = 20):
+    def train(self, num_epochs = 50):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -128,11 +131,11 @@ class Noduledetection(DetectionAlgorithm):
         print('training starts ')
         # define training and validation data loaders
         train_data_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=4, shuffle=True, num_workers=4,
+            train_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
             
         test_data_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=4, shuffle=True, num_workers=4,
+            test_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
     
     
@@ -147,14 +150,13 @@ class Noduledetection(DetectionAlgorithm):
         for epoch in range(num_epochs):
             print('epoch ', str(epoch),' is running')
             self.model.train()
-            train_one_epoch(self.model, optimizer, train_data_loader, self.device, epoch, print_freq=10)
+            train_one_epoch(self.model, optimizer, train_data_loader, self.device, epoch, print_freq=100)
             # update the learning rate
-            lr_scheduler.step()
+            #lr_scheduler.step()
             
             # evaluate on the test dataset
             print("evaluate on the test dataset")
             self.model.eval()  
-            #The evalute function is based on https://github.com/pytorch/vision/tree/main/references/detection
             evaluate(self.model, test_data_loader, device=self.device)            
             
             #IMPORTANT: save retrained version frequently.
