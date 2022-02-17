@@ -4,9 +4,10 @@ from matplotlib import pyplot as plt
 
 from pandas import DataFrame
 from scipy.ndimage import center_of_mass, label
-import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
 import torch
+import torchvision
+
 from evalutils import DetectionAlgorithm
 from evalutils.validators import (
     UniquePathIndicesValidator,
@@ -15,10 +16,13 @@ from evalutils.validators import (
 from skimage import transform
 import json
 from typing import Dict
-import training_utils.utils as utils
-from training_utils.dataset import CXRNoduleDataset, get_transform
+
+import train_val_utils.utils as utils
+from train_val_utils.dataset import CXRNoduleDataset, get_transform
+from train_val_utils.engine import train_one_epoch
+from train_val_utils.engine import evaluate
+
 import os
-from training_utils.train import train_one_epoch, eval_intrain, eval_aftertrain
 import itertools
 from pathlib import Path
 from postprocessing import get_NonMaxSup_boxes
@@ -31,12 +35,10 @@ email: ecemsogancioglu@gmail.com
 
 # This parameter adapts the paths between local execution and execution in docker. You can use this flag to switch between these two modes.
 # For building your docker, set this parameter to True. If False, it will run process.py locally for test purposes.
-execute_in_docker = False
-
+execute_in_docker = True
 
 class Noduledetection(DetectionAlgorithm):
-    def __init__(self, input_dir, output_dir, train=False, retrain=False, retest=False, pretrained_model=False,
-                 pretrained_backbones=False):
+    def __init__(self, input_dir, output_dir, train=False, retrain=False, retest=False):
         super().__init__(
             validators=dict(
                 input_image=(
@@ -44,45 +46,46 @@ class Noduledetection(DetectionAlgorithm):
                     UniquePathIndicesValidator(),
                 )
             ),
-            input_path=Path(input_dir),
-            output_file=Path(os.path.join(output_dir, 'nodules.json'))
+            input_path = Path(input_dir),
+            output_file = Path(os.path.join(output_dir,'nodules.json'))
         )
-
-        # ------------------------------- LOAD the model here ---------------------------------
+        
+        #------------------------------- LOAD the model here ---------------------------------
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.input_path, self.output_path = input_dir, output_dir
         print('using the device ', self.device)
-        self.model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=pretrained_model,
-                                                                          pretrained_backbone=pretrained_backbones)
-        num_classes = 2  # 1 class (nodule) + background
-        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
+ 
+        backbone = torchvision.models.detection.backbone_utils.resnet_fpn_backbone('resnet101',pretrained=True)
+        self.model = torchvision.models.detection.FasterRCNN(backbone,num_classes=2)           
+        
+        # move model to the right device
+        self.model.to(self.device)
+        
         if not (train or retest):
             # retrain or test phase
             print('loading the model.pth file :')
             self.model.load_state_dict(
-                torch.load(
-                    Path("/opt/algorithm/model.pth") if execute_in_docker else Path("model.pth"),
-                    map_location=self.device,
+            torch.load(
+                Path("/opt/algorithm/model.pth") if execute_in_docker else Path("model.pth"),
+                map_location=self.device,
                 )
-            )
-
+            ) 
+            
         if retest:
             print('loading the retrained model_retrained.pth file')
             self.model.load_state_dict(
-                torch.load(
-                    Path(os.path.join(self.output_path, 'model_retrained.pth')),
-                    map_location=self.device,
+            torch.load(
+                Path(os.path.join(self.input_path,'model_retrained.pth')),
+                map_location=self.device,
                 )
-            )
-
+            ) 
+            
         self.model.to(self.device)
-
+        
     def save(self):
         with open(str(self._output_file), "w") as f:
             json.dump(self._case_results[0], f)
-
+            
     # TODO: Copy this function for your processor as well!
     def process_case(self, *, idx, case):
         '''
@@ -95,15 +98,17 @@ class Noduledetection(DetectionAlgorithm):
         '''
         # Load and test the image for this case
         input_image, input_image_file_path = self._load_input_image(case=case)
-
+        
         # Detect and score candidates
         scored_candidates = self.predict(input_image=input_image)
-
+        
         # Write resulting candidates to nodules.json for this case
         return scored_candidates
-
-    # --------------------Write your retrain function here ------------
-    def train(self, num_epochs=5, RRC=False, RVF=False):
+    
+   
+    
+    #--------------------Write your retrain function here ------------
+    def train(self, num_epochs = 50):
         '''
         input_dir: Input directory containing all the images to train with
         output_dir: output_dir to write model to.
@@ -112,19 +117,24 @@ class Noduledetection(DetectionAlgorithm):
         # Implementation of the pytorch model and training functions is based on pytorch tutorial: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
 
         # create training dataset and defined transformations
-        self.model.train()
-        input_dir = self.input_path
-        dataset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'train.csv'), get_transform(train=True, RRC=RRC, RVF=RVF))
-        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False, RRC=False, RVF=False))
+        self.model.train() 
+        train_dir = self.input_path+"/train"
+        val_dir = self.input_path+"/test"
+        
+        train_dataset = CXRNoduleDataset(train_dir, os.path.join(train_dir, 'train.csv'), get_transform(train=True))
+        val_dataset = CXRNoduleDataset(val_dir, os.path.join(val_dir, 'test.csv'), get_transform(train=False))
+        
         print('training starts ')
         # define training and validation data loaders
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=8, shuffle=True, num_workers=8,
+        train_data_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
-        val_loader = torch.utils.data.DataLoader(
-            valset, batch_size=1, shuffle=False, num_workers=1,
+            
+        val_data_loader = torch.utils.data.DataLoader(
+            val_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
-
+    
+    
         # construct an optimizer
         params = [p for p in self.model.parameters() if p.requires_grad]
         optimizer = torch.optim.SGD(params, lr=0.005,
@@ -132,35 +142,26 @@ class Noduledetection(DetectionAlgorithm):
         # and a learning rate scheduler
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                        step_size=3,
-                                                       gamma=0.1)
+                                                       gamma=0.1)        
         for epoch in range(num_epochs):
-            train_one_epoch(self.model, optimizer, data_loader, self.device, epoch, print_freq=100)
+            print('epoch ', str(epoch),' is running')
+            self.model.train()
+            train_one_epoch(self.model, optimizer, train_data_loader, self.device, epoch, print_freq=100)
             # update the learning rate
             lr_scheduler.step()
-            print('epoch ', str(epoch), ' is running')
+            
             # evaluate on the test dataset
-
-            eval_intrain(self.model, val_loader, self.device)
-
-            # IMPORTANT: save retrained version frequently.
+            print("evaluate on the test dataset")
+            self.model.eval()  
+            evaluate(self.model, val_data_loader, device=self.device)            
+            
+            #IMPORTANT: save retrained version frequently.
             print('saving the model')
             file_name = 'model_retrained' + str(epoch) + '.pth'
             if not os.path.exists(self.output_path):
                 os.makedirs(self.output_path)
             torch.save(self.model.state_dict(), os.path.join(self.output_path, file_name))
-
-    def retest(self):
-        input_dir = self.input_path
-        valset = CXRNoduleDataset(input_dir, os.path.join(input_dir, 'test.csv'), get_transform(train=False))
-        print('retesting starts ')
-        # define validation data loaders
-        val_loader = torch.utils.data.DataLoader(
-            valset, batch_size=1, shuffle=False, num_workers=1,
-            collate_fn=utils.collate_fn)
-
-        output_dir = self.output_path
-
-        eval_aftertrain(self.model, val_loader, self.device, output_dir)
+      
 
     def format_to_GC(self, np_prediction, spacing) -> Dict:
         '''
@@ -182,48 +183,48 @@ class Noduledetection(DetectionAlgorithm):
         x_y_spacing = [spacing[0], spacing[1], spacing[0], spacing[1]]
         boxes = []
         for i, bb in enumerate(np_prediction['boxes']):
-            box = {}
-            box['corners'] = []
-            x_min, y_min, x_max, y_max = bb * x_y_spacing
-            x_min, y_min, x_max, y_max = round(x_min, 2), round(y_min, 2), round(x_max, 2), round(y_max, 2)
-            bottom_left = [x_min, y_min, np_prediction['slice'][i]]
-            bottom_right = [x_max, y_min, np_prediction['slice'][i]]
-            top_left = [x_min, y_max, np_prediction['slice'][i]]
-            top_right = [x_max, y_max, np_prediction['slice'][i]]
+            box = {}   
+            box['corners']=[]
+            x_min, y_min, x_max, y_max = bb*x_y_spacing
+            x_min, y_min, x_max, y_max  = round(x_min, 2), round(y_min, 2), round(x_max, 2), round(y_max, 2)
+            bottom_left = [x_min, y_min,  np_prediction['slice'][i]] 
+            bottom_right = [x_max, y_min,  np_prediction['slice'][i]]
+            top_left = [x_min, y_max,  np_prediction['slice'][i]]
+            top_right = [x_max, y_max,  np_prediction['slice'][i]]
             box['corners'].extend([top_right, top_left, bottom_left, bottom_right])
             box['probability'] = round(float(np_prediction['scores'][i]), 2)
             boxes.append(box)
-
-        return dict(type="Multiple 2D bounding boxes", boxes=boxes, version={"major": 1, "minor": 0})
-
+        
+        return dict(type="Multiple 2D bounding boxes", boxes=boxes, version={ "major": 1, "minor": 0 })
+        
     def merge_dict(self, results):
         merged_d = {}
         for k in results[0].keys():
             merged_d[k] = list(itertools.chain(*[d[k] for d in results]))
         return merged_d
-
+        
     def predict(self, *, input_image: SimpleITK.Image) -> DataFrame:
-        self.model.eval()
-
+        self.model.eval() 
+        
         image_data = SimpleITK.GetArrayFromImage(input_image)
         spacing = input_image.GetSpacing()
         image_data = np.array(image_data)
-
-        if len(image_data.shape) == 2:
+        
+        if len(image_data.shape)==2:
             image_data = np.expand_dims(image_data, 0)
-
+            
         results = []
         # operate on 3D image (CXRs are stacked together)
         for j in range(len(image_data)):
             # Pre-process the image
-            image = image_data[j, :, :]
+            image = image_data[j,:,:]
             # The range should be from 0 to 1.
             image = image.astype(np.float32) / np.max(image)  # normalize
             image = np.expand_dims(image, axis=0)
-            tensor_image = torch.from_numpy(image).to(self.device)  # .reshape(1, 1024, 1024)
+            tensor_image = torch.from_numpy(image).to(self.device)#.reshape(1, 1024, 1024)
             with torch.no_grad():
                 prediction = self.model([tensor_image.to(self.device)])
-
+            
             prediction = [get_NonMaxSup_boxes(prediction[0])]
             
             
@@ -264,49 +265,40 @@ class Noduledetection(DetectionAlgorithm):
             
             
             # convert predictions from tensor to numpy array.
-            np_prediction = {str(key): [i.cpu().numpy() for i in val]
-                             for key, val in prediction[0].items()}
-            np_prediction['slice'] = len(np_prediction['boxes']) * [j]
+            np_prediction = {str(key):[i.cpu().numpy() for i in val]
+                   for key, val in prediction[0].items()}
+            np_prediction['slice'] = len(np_prediction['boxes'])*[j]
             results.append(np_prediction)
-
+        
         predictions = self.merge_dict(results)
         data = self.format_to_GC(predictions, spacing)
         print(data)
         return data
 
-
 if __name__ == "__main__":
     import argparse
-
     parser = argparse.ArgumentParser(
         prog='process.py',
         description=
-        'Reads all images from an input directory and produces '
-        'results in an output directory')
+            'Reads all images from an input directory and produces '
+            'results in an output directory')
 
-    parser.add_argument('input_dir', help="input directory to process")
-    parser.add_argument('output_dir', help="output directory generate result files in")
-    parser.add_argument('--train', action='store_true', help="Algorithm on train mode.")
-    parser.add_argument('--retrain', action='store_true', help="Algorithm on retrain mode (loading previous weights).")
-    parser.add_argument('--retest', action='store_true', help="Algorithm on evaluate mode after retraining.")
+    parser.add_argument('input_dir', help = "input directory to process")
+    parser.add_argument('output_dir', help = "output directory generate result files in")
+    parser.add_argument('--train', action='store_true', help = "Algorithm on train mode.")
+    parser.add_argument('--retrain', action='store_true', help = "Algorithm on retrain mode (loading previous weights).")
+    parser.add_argument('--retest', action='store_true', help = "Algorithm on evaluate mode after retraining.")
 
-    parser.add_argument('--pretrained_model', action='store_true', help="Whether to use the pretrained Faster-RCNN "
-                                                                        "model (on COCO2017) or not ")
-    parser.add_argument('--pretrained_backbone', action='store_true', help="Whether to use the pretrained ResNet-50 "
-                                                                           "backbone (on ImageNet) or not ")
-
-    parser.add_argument('--RRC', action='store_true', help="Whether to use the resize and randomcrop data augmentation "
-                                                           "or not ")
-    parser.add_argument('--RVF', action='store_true', help="Whether to use the randomverticalflip data augmentation "
-                                                           "or not ")
-
-    parsed_args = parser.parse_args()
-    if (parsed_args.train or parsed_args.retrain):  # train mode: retrain or train
-        Noduledetection(parsed_args.input_dir, parsed_args.output_dir, parsed_args.train, parsed_args.retrain,
-                        parsed_args.retest, pretrained_model=parsed_args.pretrained_model,
-                        pretrained_backbones=parsed_args.pretrained_backbone).train(RRC=parsed_args.RRC, RVF=parsed_args.RVF)
-    else:  # test mode (test or retest)
-        if parsed_args.retest:
-            Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).retest()
-        else:
-            Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).process()
+    parsed_args = parser.parse_args()  
+    if (parsed_args.train or parsed_args.retrain):# train mode: retrain or train
+        Noduledetection(parsed_args.input_dir, parsed_args.output_dir, parsed_args.train, parsed_args.retrain, parsed_args.retest).train()
+    else:# test mode (test or retest)
+        Noduledetection(parsed_args.input_dir, parsed_args.output_dir, retest=parsed_args.retest).process()
+            
+    
+   
+    
+    
+    
+    
+    

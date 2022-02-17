@@ -109,3 +109,20 @@ ENV/
 output/
 Example_algorithm_test.ipynb
 *.tar.gz
+
+# dir with big files
+output/
+cxr_images/
+train_val/
+
+#big model files
+*.pth
+
+#ignore test for requirements.txt
+requirements.txt
+
+#ignore test for process.py
+process.py
+
+#ignore tmp test files
+tmp/
