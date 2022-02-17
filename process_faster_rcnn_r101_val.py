@@ -54,11 +54,12 @@ class Noduledetection(DetectionAlgorithm):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.input_path, self.output_path = input_dir, output_dir
         print('using the device ', self.device)
+ 
+        backbone = torchvision.models.detection.backbone_utils.resnet_fpn_backbone('resnet101',pretrained=True)
+        self.model = torchvision.models.detection.FasterRCNN(backbone,num_classes=2)           
         
-        self.model = torchvision.models.detection.retinanet_resnet50_fpn(
-                                                                        pretrained=False, 
-                                                                        pretrained_backbone=True, 
-                                                                        num_classes=2)
+        # move model to the right device
+        self.model.to(self.device)
         
         if not (train or retest):
             # retrain or test phase

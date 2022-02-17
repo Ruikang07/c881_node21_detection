@@ -8,7 +8,6 @@ from scipy.ndimage import center_of_mass, label
 import torch
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-#from torchvision.models.detection.retinanet import RetinaNet
 
 from evalutils import DetectionAlgorithm
 from evalutils.validators import (
@@ -61,10 +60,7 @@ class Noduledetection(DetectionAlgorithm):
         num_classes = 2  # 1 class (nodule) + background
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)        
-        
-        # move model to the right device
-        self.model.to(self.device)
-        
+               
         if not (train or retest):
             # retrain or test phase
             print('loading the model.pth file :')
@@ -123,10 +119,10 @@ class Noduledetection(DetectionAlgorithm):
         # create training dataset and defined transformations
         self.model.train() 
         train_dir = self.input_path+"/train"
-        test_dir = self.input_path+"/test"
+        val_dir = self.input_path+"/test"
         
         train_dataset = CXRNoduleDataset(train_dir, os.path.join(train_dir, 'train.csv'), get_transform(train=True))
-        test_dataset = CXRNoduleDataset(test_dir, os.path.join(test_dir, 'test.csv'), get_transform(train=False))
+        val_dataset = CXRNoduleDataset(val_dir, os.path.join(val_dir, 'test.csv'), get_transform(train=False))
         
         print('training starts ')
         # define training and validation data loaders
@@ -134,8 +130,8 @@ class Noduledetection(DetectionAlgorithm):
             train_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
             
-        test_data_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=2, shuffle=True, num_workers=4,
+        val_data_loader = torch.utils.data.DataLoader(
+            val_dataset, batch_size=2, shuffle=True, num_workers=4,
             collate_fn=utils.collate_fn)
     
     
@@ -152,17 +148,19 @@ class Noduledetection(DetectionAlgorithm):
             self.model.train()
             train_one_epoch(self.model, optimizer, train_data_loader, self.device, epoch, print_freq=100)
             # update the learning rate
-            #lr_scheduler.step()
+            lr_scheduler.step()
             
             # evaluate on the test dataset
             print("evaluate on the test dataset")
             self.model.eval()  
-            evaluate(self.model, test_data_loader, device=self.device)            
+            evaluate(self.model, val_data_loader, device=self.device)            
             
             #IMPORTANT: save retrained version frequently.
             print('saving the model')
-            file_name = 'model_retrained' + str(epoch) + '.pth'
-            torch.save(self.model.state_dict(), os.path.join(self.output_path, file_name))
+            file_name = 'model_retrained' + str(epoch) + '.pth'           
+            if not os.path.exists(self.output_path):
+                os.makedirs(self.output_path)
+            torch.save(self.model.state_dict(), os.path.join(self.output_path, file_name))            
       
 
     def format_to_GC(self, np_prediction, spacing) -> Dict:
