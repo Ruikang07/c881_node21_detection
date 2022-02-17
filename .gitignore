@@ -116,7 +116,6 @@ cxr_images/
 train_val/
 
 #big model files
-*.pth
 
 #ignore test for requirements.txt
 requirements.txt
