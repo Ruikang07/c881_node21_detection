@@ -8,7 +8,7 @@ An object detection project of CISC881 based on [Node21- Grand Challenge](https:
 ## Tasks Division and Progress
 1. Algorithm Improvement
 * Faster R-CNN with validation
-* RetinaNet
+* RetinaNet with validation
 2. Data Pre-processing
 - [x] Dataset Local Partition
 - [x] Pre-trained Models
