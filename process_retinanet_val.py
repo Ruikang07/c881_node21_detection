@@ -16,7 +16,7 @@ from evalutils.validators import (
 from skimage import transform
 import json
 from typing import Dict
-
+#The evaluate function was based on https://github.com/pytorch/vision/tree/main/references/detection
 import train_val_utils.utils as utils
 from train_val_utils.dataset import CXRNoduleDataset, get_transform
 from train_val_utils.engine import train_one_epoch
