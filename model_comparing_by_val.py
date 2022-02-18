@@ -1,3 +1,11 @@
+""""
+The command use model_comparing_by_val.py:
+
+python model_comparing_by_val.py --train data output
+
+"""
+
+
 import SimpleITK
 import numpy as np
 from matplotlib import pyplot as plt
