@@ -68,10 +68,10 @@ class Noduledetection(DetectionAlgorithm):
                
         if train:
             # validation
-            print('loading the model file pretrained_model/model.pth :')
+            print('loading the model model.pth :')
             self.model_1.load_state_dict(
             torch.load(
-                Path("pretrained_model/model.pth"),
+                Path("model.pth"),
                 map_location=self.device,
                 )
             ) 
