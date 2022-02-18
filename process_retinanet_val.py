@@ -56,8 +56,7 @@ class Noduledetection(DetectionAlgorithm):
         print('using the device ', self.device)
         
         self.model = torchvision.models.detection.retinanet_resnet50_fpn(
-                                                                        pretrained=False, 
-                                                                        pretrained_backbone=True, 
+                                                                        pretrained=False,  
                                                                         num_classes=2)
         
         if not (train or retest):
@@ -140,7 +139,7 @@ class Noduledetection(DetectionAlgorithm):
                                     momentum=0.9, weight_decay=0.0005)
         # and a learning rate scheduler
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                       step_size=3,
+                                                       step_size=10,
                                                        gamma=0.1)        
         for epoch in range(num_epochs):
             print('epoch ', str(epoch),' is running')
