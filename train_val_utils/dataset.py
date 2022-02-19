@@ -5,25 +5,13 @@ from PIL import Image
 import pandas as pd
 import SimpleITK as sitk
 
-import training_utils.transforms as T
+import train_val_utils.transforms as T
 
-def get_transform(train, RRC, RVF):
+def get_transform(train):
     transforms = []
+    transforms.append(T.ToTensor())
     if train:
-        if RRC:
-            transforms.append(T.Resize())
-            transforms.append(T.RandomCrop())
-            transforms.append(T.ToTensor())
-        else:
-            transforms.append(T.ToTensor())
-
-        if RVF:
-            transforms.append(T.RandomHorizontalFlip(0.5))
-            transforms.append(T.RandomVerticalFlip(0.5))
-        else:
-            transforms.append(T.RandomHorizontalFlip(0.5))
-    else:
-        transforms.append(T.ToTensor())
+        transforms.append(T.RandomHorizontalFlip(0.5))
     return T.Compose(transforms)
 
 class CXRNoduleDataset(object):
@@ -81,7 +69,7 @@ class CXRNoduleDataset(object):
         
         image_name = str(self.imgs[idx])
 
-        return img, target, image_name
+        return img, target
 
     def __len__(self):
         return len(self.imgs)
