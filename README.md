@@ -6,10 +6,10 @@ An object detection project of CISC881 based on [Node21- Grand Challenge](https:
 2. [Yuchuan Li](https://github.com/infinitr0us)
 
 ## Tasks Division and Progress
-1. Algorithm Improvement
+1. Algorithm Improvement： [Ruikang Luo](https://github.com/Ruikang07)
 * Faster R-CNN with validation
 * RetinaNet with validation
-2. Data Pre-processing
+2. Data Pre-processing： [Yuchuan Li](https://github.com/infinitr0us)
 - [x] Dataset Local Partition
 - [x] Pre-trained Models
 - [x] Add local evaluation support based on the metrics of challenge on detection track
